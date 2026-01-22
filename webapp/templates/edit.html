@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head><title>Edit Microbit</title></head>
+<body>
+    <h2>Edit Microbit {{ microbit.id }}</h2>
+
+    <form method="POST" action="/edit/save">
+        <input type="hidden" name="id" value="{{ microbit.id }}">
+
+        <label>Name:</label><br>
+        <input type="text" name="name" value="{{ microbit.name }}"><br><br>
+
+        <label>Location:</label><br>
+        <input type="text" name="location" value="{{ microbit.location }}"><br><br>
+
+        <label>Radio (0–255):</label><br>
+        <input type="number" name="radio"
+               min="0" max="255" step="1"
+               value="{{ microbit.radio }}"
+               required><br><br>
+
+        <label>Message:</label><br>
+        <input type="text" name="message" value="{{ microbit.message }}"><br><br>
+
+        <button type="submit">Save</button>
+    </form>
+
+    <br>
+    <a href="/">Back</a>
+</body>
+</html>

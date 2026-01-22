@@ -1,0 +1,42 @@
+[
+  {
+    "id": "zutip",
+    "name": "Kontor",
+    "location": "Kontor",
+    "radio": 44,
+    "message": "Uryyb jbeyq",
+    "broadcast": false
+  },
+  {
+    "id": "zazip",
+    "name": "mb1",
+    "location": "Unknown",
+    "radio": 1,
+    "message": "Unknown",
+    "broadcast": false
+  },
+  {
+    "id": "tovip",
+    "name": "mb2",
+    "location": "Unknown",
+    "radio": 2,
+    "message": "Unknown",
+    "broadcast": false
+  },
+  {
+    "id": "vuzet",
+    "name": "mb3",
+    "location": "Unknown",
+    "radio": 3,
+    "message": "Unknown",
+    "broadcast": false
+  },
+  {
+    "id": "vazag",
+    "name": "mb4",
+    "location": "Unknown",
+    "radio": 4,
+    "message": "Unknown",
+    "broadcast": false
+  }
+]

@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system libs (needed for gevent)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Gunicorn command (using gevent worker for SSE)
+CMD ["gunicorn", "-k", "gevent", "-w", "1", "-b", "0.0.0.0:8080", "app:app"]

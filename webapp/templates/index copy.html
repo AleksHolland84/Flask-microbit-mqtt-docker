@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Microbit Control Board</title>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
+
+<style>
+body { font-family: Arial; text-align: center; margin: 20px; }
+
+.toast {
+    visibility: hidden;
+    min-width: 200px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    padding: 12px;
+    border-radius: 6px;
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    opacity: 0;
+    transition: opacity 0.4s, bottom 0.4s;
+    z-index: 9999;
+}
+.toast.show {
+    visibility: visible;
+    opacity: 1;
+    bottom: 40px;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin-left: 10px;
+}
+
+.broadcast-dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin-left: 8px;
+}
+
+.broadcast-dot.broadcast {
+    background-color: #20d0d6; /* green for broadcast */
+    animation: heartbeat 2s infinite;
+}
+
+.broadcast-dot.not-broadcast {
+    background-color: #fa1bb7; /* red for not broadcast */
+    animation: none;
+}
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  60% { transform: scale(1.2); opacity: 0.6; }
+}
+
+.status-dot.online { background-color: #08ff67; animation: heartbeat 2s infinite; }
+.status-dot.offline { background-color: #d40000; animation: none; }
+.status-dot.unknown { background-color: #ffd900; animation: none; }
+
+#mqttMessages {
+    border: 1px solid #ccc;
+    background: #f8f8f8;
+    padding: 10px;
+    width: 80%;
+    max-width: 650px;
+    height: 200px;
+    margin: 20px auto;
+    overflow-y: scroll;
+    white-space: pre-line;
+}
+
+a { text-decoration: none; }
+</style>
+
+</head>
+
+<body>
+
+<h1>Microbit Control Panel</h1>
+
+<p id="mqttStatus"></p>
+<p id="mqttInfo"></p> <!-- new line to show host and port -->
+
+<div id="microbitControls"></div>
+
+<h2>Add Microbit</h2>
+<form id="addMicrobitForm">
+    <input name="new_id" placeholder="ID" required>
+    <input name="name" placeholder="Name">
+    <input name="location" placeholder="Location">
+    <input name="radio" type="number" min="0" max="255" step="1" placeholder="Radio (0–255)" required>
+    <input name="message" placeholder="Message">
+    <button type="submit">Add</button>
+</form>
+
+<h2>Pending Microbits</h2>
+<div id="pendingList"></div>
+
+<h2>MQTT Messages</h2>
+<div id="mqttMessages"></div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// -----------------------
+// CONNECT TO MQTT (WebSocket, automatic)
+// -----------------------
+let client;
+let lastSeen = {};
+
+window.onload = function() {
+    // Automatically connect to the MQTT backend on the same host
+    const host = window.location.hostname;
+    const port = 9001; // WebSocket port
+
+    connectToBroker(host, port);
+}
+
+function connectToBroker(host, port) {
+    const url = `ws://${host}:${port}`;
+
+    if (client) client.end();
+
+    client = mqtt.connect(url);
+
+    document.getElementById("mqttStatus").innerText = "Connecting...";
+    document.getElementById("mqttInfo").innerText = `Host: ${host}, Port: ${port}`;
+
+    client.on("connect", () => {
+        document.getElementById("mqttStatus").innerText = "Connected!";
+        showToast("Connected to MQTT backend via WebSocket");
+        client.subscribe("microbits/#");
+    });
+
+    client.on("message", (topic, msg) => {
+        appendLog(topic + " → " + msg.toString());
+        const parts = topic.split("/");
+        const id = parts[1];
+        if (msg.toString() === "online") heartbeat(id);
+    });
+
+    client.on("error", (err) => {
+        document.getElementById("mqttStatus").innerText = "Connection failed";
+        console.error("MQTT Error:", err);
+    });
+}
+
+function disconnectBroker() {
+    if (client) { client.end(true); client = null; }
+    document.getElementById("mqttStatus").innerText = "Disconnected";
+    showToast("Disconnected from broker");
+}
+
+// -----------------------
+// Heartbeat
+// -----------------------
+function heartbeat(id) {
+    lastSeen[id] = Date.now();
+    const dot = document.getElementById("status-" + id);
+    if (dot) dot.className = "status-dot online";
+}
+
+// -----------------------
+// Ping
+// -----------------------
+function sendPing(id) { sendForm(id, "ping"); }
+
+// -----------------------
+// Offline checker
+// -----------------------
+setInterval(() => {
+    const now = Date.now();
+    for (const id in lastSeen) {
+        if (now - lastSeen[id] > 60000) {
+            const dot = document.getElementById("status-" + id);
+            if (dot) dot.className = "status-dot offline";
+        }
+    }
+}, 5000);
+
+// -----------------------
+// Generic control POST
+// -----------------------
+function sendForm(id, action) {
+    const form = new FormData();
+    form.append("id", id);
+    form.append("action", action);
+
+    fetch("/control", { method: "POST", body: form })
+        .then(r => r.json())
+        .then(data => showToast(data.message))
+        .catch(err => console.error("Error:", err));
+}
+
+// -----------------------
+// Logging & Toasts
+// -----------------------
+function appendLog(txt) {
+    const box = document.getElementById("mqttMessages");
+    box.textContent += txt + "\n";
+    box.scrollTop = box.scrollHeight;
+}
+
+function showToast(message) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3000);
+}
+
+// -----------------------
+// Remove confirmation
+// -----------------------
+function confirmRemove(id) {
+    if (confirm("Are you sure you want to remove microbit '" + id + "'?")) {
+        sendForm(id, "remove");
+    }
+}
+
+// -----------------------
+// Approve / Reject Microbit via AJAX
+// -----------------------
+function approveMicrobit(id) {
+    fetch(`/approve/${id}`, { method: "POST" })
+        .then(r => r.json()).then(data => showToast(data.message));
+}
+
+function rejectMicrobit(id) {
+    fetch(`/reject/${id}`, { method: "POST" })
+        .then(r => r.json()).then(data => showToast(data.message));
+}
+
+// -----------------------
+// Add Microbit via AJAX
+// -----------------------
+document.getElementById("addMicrobitForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
+    try {
+        const res = await fetch("/add", { method: "POST", body: formData });
+        const data = await res.json();
+        showToast(data.message);
+        form.reset();
+    } catch (err) { console.error(err); }
+});
+
+// -----------------------
+// Load / Render Microbits
+// -----------------------
+async function loadMicrobits() {
+    try {
+        let res = await fetch("/api/microbits");
+        let data = await res.json();
+        renderMicrobitList(data.approved, data.pending);
+    } catch (err) { console.error("Failed to load microbits:", err); }
+}
+
+function renderMicrobitList(approved, pending) {
+    let container = document.getElementById("microbitControls");
+    container.innerHTML = "";
+
+    approved.forEach(mb => {
+        container.innerHTML += `
+            <div class="microbit">
+                <h3>${mb.name} (${mb.id})</h3>
+                <p>${mb.location}</p>
+
+                <div class="broadcast-dot ${mb.broadcast ? 'broadcast' : 'not-broadcast'}" title="${mb.broadcast ? 'broadcast' : 'Not broadcast'}"></div>                
+
+                <button onclick="sendForm('${mb.id}', 'start')">Start</button>
+                <button onclick="sendForm('${mb.id}', 'stop')">Stop</button>
+                <button onclick="confirmRemove('${mb.id}')">Remove</button>
+                <button onclick="sendForm('${mb.id}', 'update_config')">Send Config</button>
+                <a href="/edit/${mb.id}"><button>Edit</button></a>
+                <button onclick="sendPing('${mb.id}')">Ping</button>
+
+                <div id="status-${mb.id}" class="status-dot unknown"></div>
+            </div>
+        `;
+    });
+
+    let pendingDiv = document.getElementById("pendingList");
+    pendingDiv.innerHTML = "";
+    pending.forEach(id => {
+        pendingDiv.innerHTML += `
+            <div>
+                <strong>${id}</strong>
+                <button onclick="approveMicrobit('${id}')">Approve</button>
+                <button onclick="rejectMicrobit('${id}')">Reject</button>
+            </div>
+        `;
+    });
+
+    // Restore status dots
+    const now = Date.now();
+    for (const id in lastSeen) {
+        const dot = document.getElementById("status-" + id);
+        if (!dot) continue;
+
+        dot.className = (now - lastSeen[id] < 60000)
+            ? "status-dot online"
+            : "status-dot offline";
+    }
+}
+
+// -----------------------
+// SSE Listener
+// -----------------------
+const evtSource = new EventSource("/events");
+evtSource.addEventListener("refresh", async () => {
+    console.log("SSE: Refresh triggered");
+    loadMicrobits();
+});
+
+// Initial load
+loadMicrobits();
+
+</script>
+</body>
+</html>

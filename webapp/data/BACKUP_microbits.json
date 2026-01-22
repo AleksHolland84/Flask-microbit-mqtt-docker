@@ -1,0 +1,12 @@
+[
+  {
+    "id": "mb1",
+    "name": "Front Door Sensor",
+    "location": "Entrance Hall"
+  },
+  {
+    "id": "mb2",
+    "name": "Greenhouse Monitor",
+    "location": "Garden"
+  }
+]
